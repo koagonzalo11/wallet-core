@@ -9,7 +9,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@trustwallet/wallet-core": "3.0.4"
+    "@trustwallet/wallet-core": "3.3.3"
   },
   "devDependencies": {
     "@types/node": "^10.9.1",
