@@ -86,6 +86,7 @@ class CoinAddressDerivationTests: XCTestCase {
                      .scroll,
                      .arbitrum,
                      .arbitrumNova,
+                     .ecochain,
                      .avalancheCChain,
                      .xdai,
                      .fantom,
@@ -202,6 +203,9 @@ class CoinAddressDerivationTests: XCTestCase {
                     assertCoinDerivation(coin, expectedResult, derivedAddress, address)
                 case .polkadot:
                     let expectedResult = "13nN6BGAoJwd7Nw1XxeBCx5YcBXuYnL94Mh7i3xBprqVSsFk"
+                    assertCoinDerivation(coin, expectedResult, derivedAddress, address)
+                case .polymesh:
+                    let expectedResult = "2DHK8VhBpacs9quk78AVP9TmmcG5iXi2oKtZqneSNsVXxCKw"
                     assertCoinDerivation(coin, expectedResult, derivedAddress, address)
                 case .qtum:
                     let expectedResult = "QhceuaTdeCZtcxmVc6yyEDEJ7Riu5gWFoF"

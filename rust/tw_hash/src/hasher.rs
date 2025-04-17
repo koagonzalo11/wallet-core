@@ -2,22 +2,35 @@
 //
 // Copyright © 2017 Trust Wallet.
 
-use crate::blake2::{blake2_b_personal, verify_hash_size, verify_personal};
-use crate::ripemd::ripemd_160;
-use crate::sha2::sha256;
+use crate::blake::blake_256;
+use crate::ripemd::{blake256_ripemd, sha256_ripemd};
+use crate::sha2::{sha256, sha256_d};
 use crate::sha3::keccak256;
-use crate::{Error, H160, H256};
+use crate::{H160, H256};
 use serde::Deserialize;
 use tw_memory::Data;
 
-/// ripemd hash of the SHA256 hash.
-pub fn sha256_ripemd(data: &[u8]) -> Data {
-    ripemd_160(&sha256(data))
-}
+#[macro_export]
+macro_rules! impl_static_hasher {
+    ($name:ty, $hash_fun:ident, $hash_len:literal) => {
+        impl $crate::hasher::StaticHasher for $name {
+            const HASH_LEN: usize = $hash_len;
 
-/// SHA256 hash of the SHA256 hash.
-pub fn sha256_d(data: &[u8]) -> Data {
-    sha256(&sha256(data))
+            fn hash(data: &[u8]) -> Vec<u8> {
+                $hash_fun(data)
+            }
+        }
+
+        impl $crate::hasher::StatefulHasher for $name {
+            fn hash(&self, data: &[u8]) -> Vec<u8> {
+                $hash_fun(data)
+            }
+
+            fn hash_len(&self) -> usize {
+                $hash_len
+            }
+        }
+    };
 }
 
 /// TapSighash, required for Bitcoin Taproot. This function computes
@@ -38,11 +51,27 @@ pub fn tapsighash(data: &[u8]) -> Data {
     sha256(&t)
 }
 
-pub trait HasherOps {
+/// A trait for hashing algorithms that do not require pre-configuration, and can be used statically.
+pub trait StaticHasher {
+    const HASH_LEN: usize;
+
+    fn hash(data: &[u8]) -> Data;
+
+    /// Returns a zeroized hash with a corresponding len.
+    fn zero_hash() -> Data {
+        vec![0; Self::HASH_LEN]
+    }
+}
+
+/// A trait for hashing algorithms that require pre-configuration,
+/// but can also be implemented for stateless hashers like [`Hasher`] enum.
+pub trait StatefulHasher {
     fn hash(&self, data: &[u8]) -> Data;
 
     /// Returns a zeroized hash with a corresponding len.
-    fn zero_hash(&self) -> Data;
+    fn zero_hash(&self) -> Data {
+        vec![0; self.hash_len()]
+    }
 
     /// Returns a corresponding hash len.
     fn hash_len(&self) -> usize;
@@ -64,64 +93,34 @@ pub enum Hasher {
     /// ripemd hash of the SHA256 hash
     #[serde(rename = "sha256ripemd")]
     Sha256ripemd,
+    #[serde(rename = "blake256")]
+    Blake256,
+    /// ripemd hash of the BLAKE256 hash
+    #[serde(rename = "blake256ripemd")]
+    Blake256ripemd,
     #[serde(rename = "tapsighash")]
     TapSighash,
 }
 
-impl HasherOps for Hasher {
+impl StatefulHasher for Hasher {
     fn hash(&self, data: &[u8]) -> Data {
         match self {
             Hasher::Sha256 => sha256(data),
             Hasher::Keccak256 => keccak256(data),
             Hasher::Sha256d => sha256_d(data),
             Hasher::Sha256ripemd => sha256_ripemd(data),
+            Hasher::Blake256 => blake_256(data),
+            Hasher::Blake256ripemd => blake256_ripemd(data),
             Hasher::TapSighash => tapsighash(data),
         }
-    }
-
-    /// Returns a zeroized hash with a corresponding len.
-    fn zero_hash(&self) -> Data {
-        vec![0; self.hash_len()]
     }
 
     /// Returns a corresponding hash len.
     fn hash_len(&self) -> usize {
         match self {
-            Hasher::Sha256 | Hasher::Keccak256 | Hasher::Sha256d => H256::len(),
-            Hasher::Sha256ripemd => H160::len(),
+            Hasher::Sha256 | Hasher::Keccak256 | Hasher::Sha256d | Hasher::Blake256 => H256::len(),
+            Hasher::Sha256ripemd | Hasher::Blake256ripemd => H160::len(),
             Hasher::TapSighash => H256::len(),
         }
-    }
-}
-
-pub struct Blake2bPersonalHasher<'a> {
-    pub hash_len: usize,
-    pub personalisation: &'a [u8],
-}
-
-impl<'a> Blake2bPersonalHasher<'a> {
-    pub fn new(hash_len: usize, personalisation: &'a [u8]) -> Result<Self, Error> {
-        verify_hash_size(hash_len)?;
-        verify_personal(personalisation)?;
-        Ok(Blake2bPersonalHasher {
-            hash_len,
-            personalisation,
-        })
-    }
-}
-
-impl HasherOps for Blake2bPersonalHasher<'_> {
-    fn hash(&self, data: &[u8]) -> Data {
-        blake2_b_personal(data, self.hash_len, self.personalisation).expect(
-            "'hash_len' and 'personalisation' are checked in `Blake2bPersonalHasher::new()`",
-        )
-    }
-
-    fn zero_hash(&self) -> Data {
-        vec![0; self.hash_len]
-    }
-
-    fn hash_len(&self) -> usize {
-        self.hash_len
     }
 }

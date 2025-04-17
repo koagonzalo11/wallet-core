@@ -211,7 +211,9 @@ impl<'a, Context: UtxoContext> UtxoProtobuf<'a, Context> {
             .prev_index(index)
             .sequence(sequence)
             .amount(self.input.value)
-            .sighash_type(sighash_ty))
+            .sighash_type(sighash_ty)
+            .tx_hasher(Context::TX_HASHER)
+            .public_key_hasher(Context::PUBLIC_KEY_HASHER))
     }
 
     pub fn sighash_ty(&self) -> SigningResult<SighashType> {
@@ -230,7 +232,7 @@ impl<'a, Context: UtxoContext> UtxoProtobuf<'a, Context> {
             PublicKeyOrHashType::pubkey(ref pubkey) => pubkey.as_ref(),
             PublicKeyOrHashType::hash(ref hash) => {
                 let hash = H160::try_from(hash.as_ref())
-                    .tw_err(|_| SigningErrorType::Error_invalid_params)
+                    .tw_err(SigningErrorType::Error_invalid_params)
                     .context("Expected 20 bytes public key hash")?;
                 self.public_keys.get_public_key(&hash)?
             },
@@ -253,7 +255,7 @@ pub fn parse_out_point(maybe_out_point: &Option<UtxoProto::OutPoint>) -> Signing
         .context("No OutPoint provided for a UTXO")?;
 
     let hash = H256::try_from(out_point.hash.as_ref())
-        .tw_err(|_| SigningErrorType::Error_invalid_params)
+        .tw_err(SigningErrorType::Error_invalid_params)
         .context("Invalid previous txid")?;
 
     Ok(OutPoint {
